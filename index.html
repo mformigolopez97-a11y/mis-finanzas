@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Mis finanzas</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#0D1217">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Mis finanzas">
+<link rel="apple-touch-icon" href="icono-180.png">
+<meta name="referrer" content="no-referrer">
+<style id="estilos-panel"></style>
+<style>
+  body{padding:max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom))}
+  .barra-sup{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:0 0 6px}
+  .barra-sup button,.boton{font:600 16px -apple-system,system-ui,sans-serif;color:var(--tinta);background:var(--carta);border:0;border-radius:12px;padding:10px 14px}
+  .boton.primario{background:var(--acento);color:#fff}
+  .mes-nav{display:flex;align-items:center;gap:6px}
+  .mes-nav button{min-width:44px}
+  .aviso-sup{background:var(--carta);border-radius:12px;padding:10px 12px;margin:8px 0;font-size:15px;color:var(--suave)}
+  .ajuste{display:flex;align-items:center;gap:8px;padding:8px 0;border-top:1px solid var(--linea)}
+  .ajuste:first-of-type{border-top:0}
+  .ajuste label{flex:1}
+  .ajuste input,.ajuste select{font:16px -apple-system,system-ui,sans-serif;color:var(--tinta);background:var(--fondo);border:1px solid var(--linea);border-radius:10px;padding:8px 10px;width:120px}
+  .ajuste input.ancho,.ajuste select.ancho{flex:1;width:auto}
+  .quitar{background:none;border:0;color:var(--mal);font-size:22px;padding:4px 8px}
+  .acciones{display:flex;gap:10px;justify-content:flex-end;margin-top:12px}
+  .oculto{display:none}
+</style>
+</head>
+<body>
+<div class="barra-sup">
+  <div class="mes-nav">
+    <button id="mes-ant" aria-label="Mes anterior">‹</button>
+    <button id="mes-sig" aria-label="Mes siguiente">›</button>
+  </div>
+  <button id="abrir-ajustes">Ajustes</button>
+</div>
+<div id="aviso" class="aviso-sup oculto"></div>
+<main id="vista"></main>
+<script src="finanzas.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
