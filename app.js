@@ -105,7 +105,7 @@ function pintar() {
   const vista = document.getElementById("vista");
   const c = config();
   if (!c) {
-    vista.innerHTML = `<section><h2>Falta la configuración</h2><p class="nota">Entra desde el icono "Mis finanzas" y comprueba que el archivo config.txt está en la carpeta Finanzas, junto a movimientos.txt.</p></section>`;
+    vista.innerHTML = `<section><h2>Falta la configuración</h2><p class="nota">Entra siempre desde el icono "Mis finanzas" de tu pantalla de inicio.</p></section>`;
     return;
   }
   if (enAjustes) return pintarAjustes(c);
