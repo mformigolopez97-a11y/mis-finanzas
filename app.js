@@ -65,9 +65,17 @@ function leerEnlace() {
   try { h = decodeURIComponent(h); } catch (e) { /* se queda como llegó */ }
   if (!h || h.length < 3) return;
   const partes = {};
-  for (const trozo of h.slice(1).split("&")) {
-    const i = trozo.indexOf("=");
-    if (i > 0) partes[trozo.slice(0, i)] = trozo.slice(i + 1);
+  // Formato del atajo: #c<config>.d<movimientos>, sin "=" ni "&": el iPhone
+  // cortaba la dirección en el primer "=" (comprobado en captura, 2026-11-01).
+  const corte = h.indexOf(".d");
+  if (h.startsWith("#c") && corte > 2) {
+    partes.c = h.slice(2, corte);
+    partes.d = h.slice(corte + 2);
+  } else {
+    for (const trozo of h.slice(1).split("&")) {
+      const i = trozo.indexOf("=");
+      if (i > 0) partes[trozo.slice(0, i)] = trozo.slice(i + 1);
+    }
   }
   const textoConfig = partes.c || partes.config;
   try {
@@ -177,7 +185,7 @@ document.getElementById("mes-sig").addEventListener("click", () => { mes = mover
 document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 5;
+const VERSION_APP = 6;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
 const LLEGO = `largo ${location.href.length} · tras # ${location.hash.length} (${location.hash.slice(0, 6)}) · tras ? ${location.search.length} (${location.search.slice(0, 6)})`;

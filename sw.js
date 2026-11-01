@@ -4,7 +4,7 @@
   versiones nuevas solo. Nunca guarda ni envía datos: solo los archivos de
   la propia app.
 */
-const VERSION = "mis-finanzas-v5";
+const VERSION = "mis-finanzas-v6";
 const ARCHIVOS = ["./", "./index.html", "./app.js", "./finanzas.js", "./manifest.webmanifest", "./icono-180.png", "./icono-192.png", "./icono-512.png"];
 const ESPERA = 2500;
 
