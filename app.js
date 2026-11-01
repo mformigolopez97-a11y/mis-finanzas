@@ -63,7 +63,12 @@ function leerEnlace() {
   // nunca lleva "%", así que descodificar no estropea nada.
   let h = location.hash;
   try { h = decodeURIComponent(h); } catch (e) { /* se queda como llegó */ }
-  if (!h || h.length < 3) return;
+  if (!h) return;
+  // La dirección se deja en la carpeta (sin index.html): así el próximo enlace
+  // del atajo, que lleva index.html, es una página distinta y Safari la carga
+  // entera en vez de reutilizar la pestaña abierta.
+  const limpiar = () => history.replaceState(null, "", location.pathname.replace(/index.html$/, ""));
+  if (h.length < 3) return limpiar();
   const partes = {};
   // Formato del atajo: #c<config>.d<movimientos>, sin "=" ni "&": el iPhone
   // cortaba la dirección en el primer "=" (comprobado en captura, 2026-11-01).
@@ -97,7 +102,7 @@ function leerEnlace() {
   } catch (e) {
     avisar("No se pudo leer el enlace: " + e.message, true);
   }
-  history.replaceState(null, "", location.pathname);
+  limpiar();
 }
 
 let mes = mesActual();
@@ -185,10 +190,20 @@ document.getElementById("mes-sig").addEventListener("click", () => { mes = mover
 document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 6;
+const VERSION_APP = 7;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
-const LLEGO = `largo ${location.href.length} · tras # ${location.hash.length} (${location.hash.slice(0, 6)}) · tras ? ${location.search.length} (${location.search.slice(0, 6)})`;
+const LLEGO = (() => {
+  let tipo = "";
+  try { tipo = performance.getEntriesByType("navigation")[0].type; } catch (e) { /* sin dato */ }
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  const ahoraMismo = `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())} ${tipo} · largo ${location.href.length} · tras # ${location.hash.length} (${location.hash.slice(0, 6)})`;
+  let historial = [];
+  try { historial = JSON.parse(leer("mf-diagnostico") || "[]"); } catch (e) { /* vacío */ }
+  historial = [ahoraMismo, ...historial].slice(0, 4);
+  guardar("mf-diagnostico", JSON.stringify(historial));
+  return historial.join(" | ");
+})();
 document.body.insertAdjacentHTML("beforeend", `<p class="nota" style="text-align:center;opacity:.6">versión ${VERSION_APP}</p>`);
 
 leerEnlace();
