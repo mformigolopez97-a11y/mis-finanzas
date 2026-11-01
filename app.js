@@ -2,16 +2,20 @@
   Mis finanzas — pantallas y guardado en el teléfono.
 
   Los datos llegan dentro del enlace, detrás de "#", que el navegador nunca
-  envía a ningún servidor:
-    #config=…  la configuración (una vez, o cuando cambie)
-    #d=…       el archivo de movimientos (lo pone el atajo del iPhone)
+  envía a ningún servidor. El atajo "Mis finanzas" lee los dos archivos de
+  la carpeta Finanzas del iPhone y abre:
+    #c=…&d=…   c = config.txt, d = movimientos.txt (los dos en base64)
   Se guardan en el almacenamiento de este teléfono y se borran del enlace al
   momento. La app no hace ninguna conexión salvo traerse su propio programa.
+
+  Los cambios hechos en Ajustes se respetan hasta que llegue un config.txt
+  distinto del último recibido (el que manda Claude o el ordenador).
 */
 "use strict";
 
 const F = window.Finanzas;
 const CLAVE_CONFIG = "mf-config";
+const CLAVE_RECIBIDA = "mf-config-recibida";
 const CLAVE_DATOS = "mf-movimientos";
 const CLAVE_FECHA = "mf-actualizado";
 
@@ -57,14 +61,26 @@ function avisar(texto, esError) {
 function leerEnlace() {
   const h = location.hash;
   if (!h || h.length < 3) return;
+  const partes = {};
+  for (const trozo of h.slice(1).split("&")) {
+    const i = trozo.indexOf("=");
+    if (i > 0) partes[trozo.slice(0, i)] = trozo.slice(i + 1);
+  }
+  const textoConfig = partes.c || partes.config;
   try {
-    if (h.startsWith("#config=")) {
-      const config = JSON.parse(desdeBase64(h.slice(8)));
+    if (textoConfig) {
+      const recibida = desdeBase64(textoConfig);
+      const config = JSON.parse(recibida);
       if (!config.bancos || !config.presupuestos) throw new Error("configuración incompleta");
-      guardar(CLAVE_CONFIG, JSON.stringify(config));
-      avisar("Configuración guardada en este teléfono.");
-    } else if (h.startsWith("#d=")) {
-      guardar(CLAVE_DATOS, desdeBase64(h.slice(3)));
+      if (recibida !== leer(CLAVE_RECIBIDA) || !leer(CLAVE_CONFIG)) {
+        const habia = leer(CLAVE_RECIBIDA);
+        guardar(CLAVE_CONFIG, JSON.stringify(config));
+        guardar(CLAVE_RECIBIDA, recibida);
+        avisar(habia ? "Configuración actualizada." : "Configuración guardada en este teléfono.");
+      }
+    }
+    if (partes.d !== undefined) {
+      guardar(CLAVE_DATOS, desdeBase64(partes.d));
       guardar(CLAVE_FECHA, ahora());
     }
   } catch (e) {
@@ -89,7 +105,7 @@ function pintar() {
   const vista = document.getElementById("vista");
   const c = config();
   if (!c) {
-    vista.innerHTML = `<section><h2>Falta la configuración</h2><p class="nota">Abre una vez el enlace de configuración que te dio Claude. Después, entra siempre desde el icono "Mis finanzas".</p></section>`;
+    vista.innerHTML = `<section><h2>Falta la configuración</h2><p class="nota">Entra desde el icono "Mis finanzas" y comprueba que el archivo config.txt está en la carpeta Finanzas, junto a movimientos.txt.</p></section>`;
     return;
   }
   if (enAjustes) return pintarAjustes(c);
