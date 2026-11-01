@@ -173,11 +173,16 @@ document.getElementById("mes-ant").addEventListener("click", () => { mes = mover
 document.getElementById("mes-sig").addEventListener("click", () => { mes = moverMes(mes, 1); enAjustes = false; pintar(); });
 document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; avisar(""); pintar(); });
 
+// Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
+const VERSION_APP = 4;
+document.body.insertAdjacentHTML("beforeend", `<p class="nota" style="text-align:center;opacity:.6">versión ${VERSION_APP}</p>`);
+
 leerEnlace();
 pintar();
-// Si la app ya estaba abierta, un enlace nuevo solo cambia lo que va tras "#":
-// no se recarga la página, así que hay que escucharlo.
-window.addEventListener("hashchange", () => { leerEnlace(); pintar(); });
+// Si la app ya estaba abierta, un enlace nuevo solo cambia lo que va tras "#"
+// y Safari no recarga la página: seguiría con el programa viejo. Se recarga
+// para traer siempre la última versión (el enlace se lee al arrancar).
+window.addEventListener("hashchange", () => location.reload());
 
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
   navigator.serviceWorker.register("sw.js").catch(() => {});
