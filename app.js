@@ -59,7 +59,10 @@ function avisar(texto, esError) {
 
 // Lee lo que trae el enlace y lo borra de la barra de direcciones.
 function leerEnlace() {
-  const h = location.hash;
+  // Por si quien abre el enlace codifica los signos (= como %3D): el base64
+  // nunca lleva "%", así que descodificar no estropea nada.
+  let h = location.hash;
+  try { h = decodeURIComponent(h); } catch (e) { /* se queda como llegó */ }
   if (!h || h.length < 3) return;
   const partes = {};
   for (const trozo of h.slice(1).split("&")) {
@@ -105,7 +108,7 @@ function pintar() {
   const vista = document.getElementById("vista");
   const c = config();
   if (!c) {
-    vista.innerHTML = `<section><h2>Falta la configuración</h2><p class="nota">Entra siempre desde el icono "Mis finanzas" de tu pantalla de inicio.</p></section>`;
+    vista.innerHTML = `<section><h2>Falta la configuración</h2><p class="nota">Entra siempre desde el icono "Mis finanzas" de tu pantalla de inicio.</p><p class="nota">Llegó: ${F.esc(LLEGO)}</p></section>`;
     return;
   }
   if (enAjustes) return pintarAjustes(c);
@@ -174,7 +177,10 @@ document.getElementById("mes-sig").addEventListener("click", () => { mes = mover
 document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 4;
+const VERSION_APP = 5;
+// Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
+// caracteres, que son siempre iguales y no contienen datos).
+const LLEGO = `largo ${location.href.length} · tras # ${location.hash.length} (${location.hash.slice(0, 6)}) · tras ? ${location.search.length} (${location.search.slice(0, 6)})`;
 document.body.insertAdjacentHTML("beforeend", `<p class="nota" style="text-align:center;opacity:.6">versión ${VERSION_APP}</p>`);
 
 leerEnlace();
