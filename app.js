@@ -20,6 +20,12 @@ const CLAVE_DATOS = "mf-movimientos";
 const CLAVE_FECHA = "mf-actualizado";
 // Gastos fijos marcados como pagados a mano, por mes: { "AAAA-MM": [nombres] }
 const CLAVE_PAGADOS = "mf-pagados";
+// Gastos apuntados a mano: [{ id, fecha, importe, categoria, comercio, persona }]
+const CLAVE_MANUALES = "mf-manuales";
+
+function manuales() {
+  try { return JSON.parse(leer(CLAVE_MANUALES) || "[]"); } catch (e) { return []; }
+}
 
 function pagadosAMano() {
   try { return JSON.parse(leer(CLAVE_PAGADOS) || "{}"); } catch (e) { return {}; }
@@ -113,6 +119,14 @@ function leerEnlace() {
 
 let mes = mesActual();
 let enAjustes = false;
+let enGasto = false;
+
+// Movimientos de los SMS + gastos apuntados a mano, en orden de fecha.
+function todosLosMovimientos(c) {
+  const deSMS = F.movimientosDe([leer(CLAVE_DATOS) || ""], c);
+  const aMano = manuales().map(F.gastoManual).filter(Boolean);
+  return [...deSMS, ...aMano].sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
 
 function config() {
   const c = leer(CLAVE_CONFIG);
@@ -131,17 +145,67 @@ function pintar() {
     return;
   }
   if (enAjustes) return pintarAjustes(c);
-  const texto = leer(CLAVE_DATOS) || "";
-  const movs = F.movimientosDe([texto], c);
+  if (enGasto) return pintarGasto(c);
+  const movs = todosLosMovimientos(c);
   const r = F.resumenDelMes(movs, c, mes, { pagadosAMano: pagadosAMano()[mes] || [] });
   vista.innerHTML = F.cuerpo(r, { generado: leer(CLAVE_FECHA) || "sin movimientos todavía", familia: familia(c), botones: true });
+}
+
+/* ── Apuntar un gasto a mano (efectivo, o tarjeta cuyo SMS llega a otro móvil) ── */
+
+function hoy() {
+  const d = new Date(), p = (n) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
+
+function pintarGasto(c) {
+  const vista = document.getElementById("vista");
+  const e = F.esc;
+  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.comercios || []).map((r) => r.categoria), "Otros"])];
+  const lista = manuales().slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
+  vista.innerHTML = `
+  <h1>Apuntar un gasto</h1>
+  <section>
+    <div class="ajuste"><label>Importe (AED)</label><input id="g-importe" type="number" inputmode="decimal" step="0.01" min="0" placeholder="0.00"></div>
+    <div class="ajuste"><label>Categoría</label><select id="g-categoria" class="ancho">${categorias.map((cat) => `<option>${e(cat)}</option>`).join("")}</select></div>
+    <div class="ajuste"><label>Dónde</label><input id="g-comercio" class="ancho" placeholder="opcional"></div>
+    <div class="ajuste"><label>Fecha</label><input id="g-fecha" class="ancho" type="date" value="${hoy()}"></div>
+    <div class="ajuste"><label>Quién</label><input id="g-persona" class="ancho" value="${e(Object.values(c.personas || {})[0] || "")}"></div>
+    <div class="acciones"><button class="boton" id="cancelar">Cancelar</button><button class="boton primario" id="guardar-gasto">Guardar gasto</button></div>
+  </section>
+  <section><h2>Apuntados a mano</h2>
+    ${lista.length ? lista.map((g) => `<div class="ajuste"><label>${e(g.comercio || g.categoria)}<div class="nota">${e(g.fecha)} · ${e(g.persona)} · ${e(g.categoria)} · ${F.aed(Math.round(Number(g.importe) * 100))}</div></label><button class="quitar" data-borrar="${e(g.id)}" aria-label="Borrar">×</button></div>`).join("")
+      : '<p class="nota">Todavía no hay ninguno.</p>'}
+  </section>`;
+
+  document.getElementById("cancelar").addEventListener("click", () => { enGasto = false; pintar(); });
+  document.getElementById("guardar-gasto").addEventListener("click", () => {
+    const g = {
+      id: String(Date.now()),
+      fecha: document.getElementById("g-fecha").value,
+      importe: Math.round(Number(document.getElementById("g-importe").value) * 100) / 100,
+      categoria: document.getElementById("g-categoria").value,
+      comercio: document.getElementById("g-comercio").value.trim(),
+      persona: document.getElementById("g-persona").value.trim(),
+    };
+    if (!F.gastoManual(g)) return avisar("Pon un importe mayor que 0 y una fecha.", true);
+    guardar(CLAVE_MANUALES, JSON.stringify([...manuales(), g]));
+    enGasto = false;
+    mes = g.fecha.slice(0, 7);
+    avisar(`Gasto de ${F.aed(Math.round(g.importe * 100))} apuntado en ${g.categoria}.`);
+    pintar();
+  });
+  vista.querySelectorAll("[data-borrar]").forEach((b) => b.addEventListener("click", () => {
+    guardar(CLAVE_MANUALES, JSON.stringify(manuales().filter((g) => g.id !== b.dataset.borrar)));
+    pintarGasto(c);
+  }));
 }
 
 /* ── Ajustes: presupuestos, gastos fijos y comercios sin categoría ── */
 
 function pintarAjustes(c) {
   const vista = document.getElementById("vista");
-  const movs = F.movimientosDe([leer(CLAVE_DATOS) || ""], c);
+  const movs = todosLosMovimientos(c);
   const sinCategoria = [...new Set(movs.filter((m) => m.categoria === "Sin clasificar" && m.comercio).map((m) => m.comercio))];
   const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.comercios || []).map((r) => r.categoria)])].sort();
   const e = F.esc;
@@ -203,12 +267,13 @@ document.getElementById("vista").addEventListener("click", (ev) => {
   pintar();
 });
 
-document.getElementById("mes-ant").addEventListener("click", () => { mes = moverMes(mes, -1); enAjustes = false; pintar(); });
-document.getElementById("mes-sig").addEventListener("click", () => { mes = moverMes(mes, 1); enAjustes = false; pintar(); });
-document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; avisar(""); pintar(); });
+document.getElementById("mes-ant").addEventListener("click", () => { mes = moverMes(mes, -1); enAjustes = false; enGasto = false; pintar(); });
+document.getElementById("mes-sig").addEventListener("click", () => { mes = moverMes(mes, 1); enAjustes = false; enGasto = false; pintar(); });
+document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; enGasto = false; avisar(""); pintar(); });
+document.getElementById("nuevo-gasto").addEventListener("click", () => { enGasto = !enGasto; enAjustes = false; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 8;
+const VERSION_APP = 9;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
 const LLEGO = (() => {

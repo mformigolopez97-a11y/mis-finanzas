@@ -126,6 +126,16 @@ function movimientosDe(textos, config) {
   }
   return lista.sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
+function gastoManual({ fecha, importe, categoria, comercio, persona }) {
+  const dia = String(fecha || "").slice(0, 10);
+  const fils = aFilsNumero(importe);
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || !(fils > 0)) return null;
+  return {
+    fecha: `${dia} 12:00`, mes: dia.slice(0, 7), persona: persona || "", tipo: "gasto", fils,
+    comercio: comercio || null, referencia: null, sms: null, avisos: [],
+    categoria: categoria || "Sin clasificar", fijo: false, manual: true,
+  };
+}
 function mesesEntre(desde, hasta) {
   const [a1, m1] = desde.split("-").map(Number);
   const [a2, m2] = hasta.split("-").map(Number);
@@ -203,7 +213,7 @@ function resumenDelMes(movimientos, config, mes, { pagadosAMano = [] } = {}) {
     movimientos: delMes.slice().reverse(),
   };
 }
-module.exports = { movimientosDe, resumenDelMes, leerLinea, tocaEsteMes };
+module.exports = { movimientosDe, resumenDelMes, leerLinea, tocaEsteMes, gastoManual };
 return module.exports;})();
 M["./panel.js"]=(function(){var module={exports:{}};var require=function(n){return M[n];};
 "use strict";
@@ -283,7 +293,7 @@ function filaMovimiento(m) {
   const etiqueta = { gasto: m.categoria, ingreso: "Ingreso", enviado: "Dinero enviado", rechazado: "Rechazado (no suma)" }[m.tipo] || "Revisar";
   const signo = m.tipo === "ingreso" ? "+" : m.tipo === "rechazado" ? "" : "−";
   const clase = m.tipo === "ingreso" ? "bien" : m.tipo === "rechazado" ? "tenue" : "";
-  return `<div class="mov"><div><b>${esc(m.comercio || etiqueta)}</b><div class="nota">${esc(m.fecha)} · ${esc(m.persona)} · ${esc(etiqueta)}</div></div>` +
+  return `<div class="mov"><div><b>${esc(m.comercio || etiqueta)}</b><div class="nota">${esc(m.fecha.slice(0, m.manual ? 10 : 16))} · ${esc(m.persona)} · ${esc(etiqueta)}${m.manual ? " · apuntado a mano" : ""}</div></div>` +
     `<div class="${clase}">${signo}${m.fils != null ? aed(m.fils) : "?"}</div></div>`;
 }
 const CSS = `:root{--fondo:#F2F4F7;--carta:#FFFFFF;--tinta:#13202B;--suave:#5E6B77;--pista:#E3E7EC;--bien:#1E9E5A;--aviso:#EA8A12;--mal:#DC2F45;--linea:#E8EBEF;--acento:#2563EB}
