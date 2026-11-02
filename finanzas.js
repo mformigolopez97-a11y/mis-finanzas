@@ -160,7 +160,8 @@ function presupuestoDelMes(movimientos, config, mes) {
     };
   });
 }
-function resumenDelMes(movimientos, config, mes) {
+function resumenDelMes(movimientos, config, mes, { pagadosAMano = [] } = {}) {
+  const aMano = new Set(pagadosAMano);
   const delMes = movimientos.filter((m) => m.mes === mes);
   const gastos = delMes.filter((m) => m.tipo === "gasto");
   const presupuesto = presupuestoDelMes(movimientos, config, mes);
@@ -170,6 +171,7 @@ function resumenDelMes(movimientos, config, mes) {
     const pagado = suma(gastos.filter((m) => m.categoria === f.nombre));
     let estado;
     if (pagado > 0) estado = "pagado";
+    else if (aMano.has(f.nombre)) estado = "pagado a mano";
     else if (toca === false) estado = "no toca este mes";
     else if (!f.reconocer || (!f.reconocer.referencia && !(f.reconocer.comercio || []).length)) estado = "falta saber cómo reconocer su SMS";
     else estado = "pendiente";
@@ -255,7 +257,7 @@ function filaPresupuesto(p) {
   return `<div class="fila"><div class="fila-cab"><b>${esc(p.categoria)}</b><span>${aed(p.consumido)} de ${aed(p.limite)} · <b class="${s.clase}">${p.porcentaje}%</b></span></div>` +
     `${barra(p.consumido, p.limite)}<div class="nota">${estado}</div>${arrastre}</div>`;
 }
-function filaFijo(f) {
+function filaFijo(f, conBotones) {
   let detalle;
   if (f.estado === "pagado") {
     detalle = f.diferencia > 0 ? `Pagado ${aed(f.pagado)} · <span class="bien">ahorro ${aed(f.diferencia)}</span>`
@@ -263,13 +265,19 @@ function filaFijo(f) {
       : `Pagado ${aed(f.pagado)}`;
   } else if (f.estado === "pendiente") {
     detalle = `Pendiente${f.dia ? ` · se cobra el día ${f.dia}` : ""}`;
+  } else if (f.estado === "pagado a mano") {
+    detalle = "Marcado como pagado · no suma al gasto hasta que llegue su SMS";
   } else if (f.estado === "no toca este mes") {
     detalle = `No toca este mes (cada ${f.cadaMeses} meses)`;
   } else {
     detalle = `Pendiente · aún no sé reconocer su SMS`;
   }
-  const marca = f.estado === "pagado" ? "✓" : f.estado === "no toca este mes" ? "–" : "○";
-  return `<div class="fijo"><span class="marca">${marca}</span><div><b>${esc(f.nombre)}</b> · ${aed(f.esperado)}<div class="nota">${detalle}</div></div></div>`;
+  const marca = f.estado === "pagado" || f.estado === "pagado a mano" ? "✓" : f.estado === "no toca este mes" ? "–" : "○";
+  const boton = !conBotones ? ""
+    : f.estado === "pagado a mano" ? `<button class="marcar" data-pagado="${esc(f.nombre)}" data-accion="quitar">Deshacer</button>`
+    : f.estado === "pagado" || f.estado === "no toca este mes" ? ""
+    : `<button class="marcar" data-pagado="${esc(f.nombre)}" data-accion="poner">Ya se pagó</button>`;
+  return `<div class="fijo"><span class="marca">${marca}</span><div style="flex:1"><b>${esc(f.nombre)}</b> · ${aed(f.esperado)}<div class="nota">${detalle}</div></div>${boton}</div>`;
 }
 function filaMovimiento(m) {
   const etiqueta = { gasto: m.categoria, ingreso: "Ingreso", enviado: "Dinero enviado", rechazado: "Rechazado (no suma)" }[m.tipo] || "Revisar";
@@ -303,7 +311,7 @@ section{background:var(--carta);border-radius:16px;padding:16px;margin:14px 0}
 .bien{color:var(--bien)}.aviso{color:var(--aviso)}.mal{color:var(--mal)}.tenue{color:var(--suave);text-decoration:line-through}
 .pie{color:var(--suave);font-size:14px;text-align:center;margin:18px 0}
 `;
-function cuerpo(r, { generado, familia } = {}) {
+function cuerpo(r, { generado, familia, botones } = {}) {
   const totalPresupuesto = r.presupuesto.reduce((t, p) => t + p.limite, 0);
   const consumidoPresupuesto = r.presupuesto.reduce((t, p) => t + p.consumido, 0);
   const revisar = r.revisar.length
@@ -331,7 +339,7 @@ function cuerpo(r, { generado, familia } = {}) {
   <div class="cifra"><small>Pagos rechazados</small><b>${r.rechazados}</b><small>no suman al gasto</small></div>
 </div>
 <section><h2>Presupuesto del mes</h2>${r.presupuesto.map(filaPresupuesto).join("")}</section>
-<section><h2>Gastos fijos</h2>${r.fijos.map(filaFijo).join("")}</section>
+<section><h2>Gastos fijos</h2>${r.fijos.map((f) => filaFijo(f, botones)).join("")}</section>
 ${rechazados}
 ${otras}
 <section><h2>Por persona</h2>${r.porPersona.length ? r.porPersona.map((p) => `<div class="mov"><b>${esc(p.persona)}</b><div>${aed(p.fils)}</div></div>`).join("") : '<p class="nota">Sin gastos este mes.</p>'}</section>

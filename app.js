@@ -18,6 +18,12 @@ const CLAVE_CONFIG = "mf-config";
 const CLAVE_RECIBIDA = "mf-config-recibida";
 const CLAVE_DATOS = "mf-movimientos";
 const CLAVE_FECHA = "mf-actualizado";
+// Gastos fijos marcados como pagados a mano, por mes: { "AAAA-MM": [nombres] }
+const CLAVE_PAGADOS = "mf-pagados";
+
+function pagadosAMano() {
+  try { return JSON.parse(leer(CLAVE_PAGADOS) || "{}"); } catch (e) { return {}; }
+}
 
 document.getElementById("estilos-panel").textContent = F.CSS;
 
@@ -127,8 +133,8 @@ function pintar() {
   if (enAjustes) return pintarAjustes(c);
   const texto = leer(CLAVE_DATOS) || "";
   const movs = F.movimientosDe([texto], c);
-  const r = F.resumenDelMes(movs, c, mes);
-  vista.innerHTML = F.cuerpo(r, { generado: leer(CLAVE_FECHA) || "sin movimientos todavía", familia: familia(c) });
+  const r = F.resumenDelMes(movs, c, mes, { pagadosAMano: pagadosAMano()[mes] || [] });
+  vista.innerHTML = F.cuerpo(r, { generado: leer(CLAVE_FECHA) || "sin movimientos todavía", familia: familia(c), botones: true });
 }
 
 /* ── Ajustes: presupuestos, gastos fijos y comercios sin categoría ── */
@@ -185,12 +191,24 @@ function pintarAjustes(c) {
   });
 }
 
+// "Ya se pagó" / "Deshacer" en los gastos fijos (para los que su SMS llega a otro teléfono).
+document.getElementById("vista").addEventListener("click", (ev) => {
+  const b = ev.target.closest("[data-pagado]");
+  if (!b) return;
+  const todos = pagadosAMano();
+  const lista = new Set(todos[mes] || []);
+  if (b.dataset.accion === "poner") lista.add(b.dataset.pagado); else lista.delete(b.dataset.pagado);
+  todos[mes] = [...lista];
+  guardar(CLAVE_PAGADOS, JSON.stringify(todos));
+  pintar();
+});
+
 document.getElementById("mes-ant").addEventListener("click", () => { mes = moverMes(mes, -1); enAjustes = false; pintar(); });
 document.getElementById("mes-sig").addEventListener("click", () => { mes = moverMes(mes, 1); enAjustes = false; pintar(); });
 document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 7;
+const VERSION_APP = 8;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
 const LLEGO = (() => {
