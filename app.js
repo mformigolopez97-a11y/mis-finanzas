@@ -161,7 +161,7 @@ function hoy() {
 function pintarGasto(c) {
   const vista = document.getElementById("vista");
   const e = F.esc;
-  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.comercios || []).map((r) => r.categoria), "Otros"])];
+  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.fijos || []).map((f) => f.nombre), ...(c.comercios || []).map((r) => r.categoria), "Otros"])];
   const lista = manuales().slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
   vista.innerHTML = `
   <h1>Apuntar un gasto</h1>
@@ -273,7 +273,7 @@ document.getElementById("abrir-ajustes").addEventListener("click", () => { enAju
 document.getElementById("nuevo-gasto").addEventListener("click", () => { enGasto = !enGasto; enAjustes = false; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 9;
+const VERSION_APP = 10;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
 const LLEGO = (() => {
