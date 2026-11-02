@@ -123,12 +123,63 @@ function leerEnlace() {
 let mes = mesActual();
 let enAjustes = false;
 let enGasto = false;
+let editando = null; // clave del movimiento que se está cambiando
+
+// Cambios hechos a un movimiento concreto: { clave: categoría | F.IGNORAR }
+const CLAVE_CAMBIOS = "mf-cambios";
+function cambios() {
+  try { return JSON.parse(leer(CLAVE_CAMBIOS) || "{}"); } catch (e) { return {}; }
+}
 
 // Movimientos de los SMS + gastos apuntados a mano, en orden de fecha.
-function todosLosMovimientos(c) {
+function movimientosSinCambios(c) {
   const deSMS = F.movimientosDe([leer(CLAVE_DATOS) || ""], c);
   const aMano = manuales().map(F.gastoManual).filter(Boolean);
   return [...deSMS, ...aMano].sort((a, b) => a.fecha.localeCompare(b.fecha));
+}
+
+function todosLosMovimientos(c) {
+  return F.aplicarCambios(movimientosSinCambios(c), cambios());
+}
+
+function listaDeCategorias(c) {
+  return [...new Set([...Object.keys(c.presupuestos), ...(c.fijos || []).map((f) => f.nombre), ...(c.comercios || []).map((r) => r.categoria), ...CATEGORIAS_SIN_LIMITE])];
+}
+
+/* ── Cambiar un gasto concreto: otra categoría, o "no es un gasto" ── */
+
+function pintarEditar(c) {
+  const vista = document.getElementById("vista");
+  const e = F.esc;
+  const m = movimientosSinCambios(c).find((x) => x.clave === editando);
+  if (!m) { editando = null; return pintar(); }
+  const actual = cambios()[m.clave] || "";
+  const opciones = [...listaDeCategorias(c), F.IGNORAR];
+  vista.innerHTML = `
+  <h1>Cambiar este gasto</h1>
+  <section>
+    <b>${e(m.comercio || "Sin comercio")}</b> · ${m.fils != null ? F.aed(m.fils) : "importe desconocido"}
+    <div class="nota">${e(F.fechaHora(m.fecha, !m.manual))} · ${e(m.persona)} · ahora en: ${e(actual || m.categoria || "—")}</div>
+    ${m.sms ? `<div class="nota sms">SMS: ${e(m.sms.replace(/\s*\n\s*/g, " · "))}</div>` : ""}
+    <div class="ajuste"><label>Categoría</label><select id="e-categoria" class="ancho">${opciones.map((o) =>
+      `<option${o === (actual || m.categoria) ? " selected" : ""}>${e(o)}</option>`).join("")}</select></div>
+    <p class="nota">Solo cambia este gasto. Las demás compras en el mismo comercio siguen igual. "${e(F.IGNORAR)}" lo quita de las cuentas (por ejemplo, un mensaje con AED que no era un pago).</p>
+    <div class="acciones">${actual ? '<button class="boton" id="e-quitar">Dejarlo como estaba</button>' : ""}<button class="boton" id="cancelar">Cancelar</button><button class="boton primario" id="e-guardar">Guardar</button></div>
+  </section>`;
+  const cerrar = () => { editando = null; pintar(); };
+  const guardarCambio = (valor) => {
+    const todos = cambios();
+    if (valor) todos[m.clave] = valor; else delete todos[m.clave];
+    guardar(CLAVE_CAMBIOS, JSON.stringify(todos));
+    cerrar();
+  };
+  document.getElementById("cancelar").addEventListener("click", cerrar);
+  document.getElementById("e-guardar").addEventListener("click", () => {
+    const v = document.getElementById("e-categoria").value;
+    guardarCambio(v === m.categoria && !actual ? null : v);
+  });
+  const quitar = document.getElementById("e-quitar");
+  if (quitar) quitar.addEventListener("click", () => guardarCambio(null));
 }
 
 function config() {
@@ -149,6 +200,7 @@ function pintar() {
   }
   if (enAjustes) return pintarAjustes(c);
   if (enGasto) return pintarGasto(c);
+  if (editando) return pintarEditar(c);
   const movs = todosLosMovimientos(c);
   const r = F.resumenDelMes(movs, c, mes, { pagadosAMano: pagadosAMano()[mes] || [] });
   vista.innerHTML = F.cuerpo(r, { generado: leer(CLAVE_FECHA) || "sin movimientos todavía", familia: familia(c), botones: true });
@@ -164,7 +216,7 @@ function hoy() {
 function pintarGasto(c) {
   const vista = document.getElementById("vista");
   const e = F.esc;
-  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.fijos || []).map((f) => f.nombre), ...(c.comercios || []).map((r) => r.categoria), ...CATEGORIAS_SIN_LIMITE])];
+  const categorias = listaDeCategorias(c);
   const lista = manuales().slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
   vista.innerHTML = `
   <h1>Apuntar un gasto</h1>
@@ -177,7 +229,7 @@ function pintarGasto(c) {
     <div class="acciones"><button class="boton" id="cancelar">Cancelar</button><button class="boton primario" id="guardar-gasto">Guardar gasto</button></div>
   </section>
   <section><h2>Apuntados a mano</h2>
-    ${lista.length ? lista.map((g) => `<div class="ajuste"><label>${e(g.comercio || g.categoria)}<div class="nota">${e(g.fecha)} · ${e(g.persona)} · ${e(g.categoria)} · ${F.aed(Math.round(Number(g.importe) * 100))}</div></label><button class="quitar" data-borrar="${e(g.id)}" aria-label="Borrar">×</button></div>`).join("")
+    ${lista.length ? lista.map((g) => `<div class="ajuste"><label>${e(g.comercio || g.categoria)}<div class="nota">${e(F.fechaHora(g.fecha, false))} · ${e(g.persona)} · ${e(g.categoria)} · ${F.aed(Math.round(Number(g.importe) * 100))}</div></label><button class="quitar" data-borrar="${e(g.id)}" aria-label="Borrar">×</button></div>`).join("")
       : '<p class="nota">Todavía no hay ninguno.</p>'}
   </section>`;
 
@@ -260,6 +312,8 @@ function pintarAjustes(c) {
 
 // "Ya se pagó" / "Deshacer" en los gastos fijos (para los que su SMS llega a otro teléfono).
 document.getElementById("vista").addEventListener("click", (ev) => {
+  const cambiar = ev.target.closest("[data-mov]");
+  if (cambiar) { editando = cambiar.dataset.mov; avisar(""); window.scrollTo(0, 0); return pintar(); }
   const b = ev.target.closest("[data-pagado]");
   if (!b) return;
   const todos = pagadosAMano();
@@ -270,13 +324,13 @@ document.getElementById("vista").addEventListener("click", (ev) => {
   pintar();
 });
 
-document.getElementById("mes-ant").addEventListener("click", () => { mes = moverMes(mes, -1); enAjustes = false; enGasto = false; pintar(); });
-document.getElementById("mes-sig").addEventListener("click", () => { mes = moverMes(mes, 1); enAjustes = false; enGasto = false; pintar(); });
-document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; enGasto = false; avisar(""); pintar(); });
-document.getElementById("nuevo-gasto").addEventListener("click", () => { enGasto = !enGasto; enAjustes = false; avisar(""); pintar(); });
+document.getElementById("mes-ant").addEventListener("click", () => { mes = moverMes(mes, -1); enAjustes = false; enGasto = false; editando = null; pintar(); });
+document.getElementById("mes-sig").addEventListener("click", () => { mes = moverMes(mes, 1); enAjustes = false; enGasto = false; editando = null; pintar(); });
+document.getElementById("abrir-ajustes").addEventListener("click", () => { enAjustes = !enAjustes; enGasto = false; editando = null; avisar(""); pintar(); });
+document.getElementById("nuevo-gasto").addEventListener("click", () => { enGasto = !enGasto; enAjustes = false; editando = null; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 11;
+const VERSION_APP = 12;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
 const LLEGO = (() => {

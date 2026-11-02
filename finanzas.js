@@ -119,22 +119,34 @@ function movimientosDe(textos, config) {
         avisos.push("no se pudo leer el tipo o el importe");
       }
       const persona = (config.personas || {})[l.dispositivo] || l.dispositivo;
-      const mov = { fecha, mes: fecha.slice(0, 7), persona, tipo, fils, comercio, referencia, sms: l.sms, avisos };
+      const mov = { clave: "s" + huella(l.sms), fecha, mes: fecha.slice(0, 7), persona, tipo, fils, comercio, referencia, sms: l.sms, avisos };
       if (tipo === "gasto") Object.assign(mov, categoriaDe(mov, config));
       lista.push(mov);
     }
   }
   return lista.sort((a, b) => a.fecha.localeCompare(b.fecha));
 }
-function gastoManual({ fecha, importe, categoria, comercio, persona }) {
+function gastoManual({ id, fecha, importe, categoria, comercio, persona }) {
   const dia = String(fecha || "").slice(0, 10);
   const fils = aFilsNumero(importe);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(dia) || !(fils > 0)) return null;
   return {
+    clave: "m" + (id || huella(`${dia}|${importe}|${categoria}|${comercio}`)),
     fecha: `${dia} 12:00`, mes: dia.slice(0, 7), persona: persona || "", tipo: "gasto", fils,
     comercio: comercio || null, referencia: null, sms: null, avisos: [],
     categoria: categoria || "Sin clasificar", fijo: false, manual: true,
   };
+}
+function huella(texto) {
+  let h = 5381;
+  for (let i = 0; i < texto.length; i++) h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
+  return h.toString(36);
+}
+const IGNORAR = "(no es un gasto)";
+function aplicarCambios(movimientos, cambios = {}) {
+  return movimientos
+    .filter((m) => cambios[m.clave] !== IGNORAR)
+    .map((m) => (cambios[m.clave] && m.tipo === "gasto" ? { ...m, categoria: cambios[m.clave], cambiado: true } : m));
 }
 function mesesEntre(desde, hasta) {
   const [a1, m1] = desde.split("-").map(Number);
@@ -213,7 +225,7 @@ function resumenDelMes(movimientos, config, mes, { pagadosAMano = [] } = {}) {
     movimientos: delMes.slice().reverse(),
   };
 }
-module.exports = { movimientosDe, resumenDelMes, leerLinea, tocaEsteMes, gastoManual };
+module.exports = { movimientosDe, resumenDelMes, leerLinea, tocaEsteMes, gastoManual, aplicarCambios, IGNORAR };
 return module.exports;})();
 M["./panel.js"]=(function(){var module={exports:{}};var require=function(n){return M[n];};
 "use strict";
@@ -289,15 +301,25 @@ function filaFijo(f, conBotones) {
     : `<button class="marcar" data-pagado="${esc(f.nombre)}" data-accion="poner">Ya se pagó</button>`;
   return `<div class="fijo"><span class="marca">${marca}</span><div style="flex:1"><b>${esc(f.nombre)}</b> · ${aed(f.esperado)}<div class="nota">${detalle}</div></div>${boton}</div>`;
 }
-function filaMovimiento(m) {
+const MESES_CORTOS = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+function fechaHora(f, conHora = true) {
+  const m = String(f || "").match(/^(\d{4})-(\d{2})-(\d{2})(?: (\d{2}):(\d{2}))?/);
+  if (!m) return String(f || "");
+  const dia = `${Number(m[3])} ${MESES_CORTOS[Number(m[2]) - 1]} ${m[1]}`;
+  if (!conHora || m[4] === undefined) return dia;
+  const h = Number(m[4]);
+  return `${dia}, ${h % 12 || 12}:${m[5]} ${h < 12 ? "a. m." : "p. m."}`;
+}
+function filaMovimiento(m, conBotones) {
   const etiqueta = { gasto: m.categoria, ingreso: "Ingreso", enviado: "Dinero enviado", rechazado: "Rechazado (no suma)" }[m.tipo] || "Revisar";
   const signo = m.tipo === "ingreso" ? "+" : m.tipo === "rechazado" ? "" : "−";
   const clase = m.tipo === "ingreso" ? "bien" : m.tipo === "rechazado" ? "tenue" : "";
   const sinClasificar = m.fils == null || (m.tipo === "gasto" && m.categoria === "Sin clasificar");
   const titulo = m.fils == null && !m.comercio ? "SMS que aún no sé leer" : m.comercio || etiqueta;
   const sms = sinClasificar && m.sms ? `<div class="nota sms">SMS: ${esc(m.sms.replace(/\s*\n\s*/g, " · "))}</div>` : "";
-  return `<div class="mov"><div><b>${esc(titulo)}</b>${sms}<div class="nota">${esc(m.fecha.slice(0, m.manual ? 10 : 16))} · ${esc(m.persona)} · ${esc(etiqueta)}${m.manual ? " · apuntado a mano" : ""}</div></div>` +
-    `<div class="${clase}">${signo}${m.fils != null ? aed(m.fils) : "?"}</div></div>`;
+  return `<div class="mov"><div><b>${esc(titulo)}</b>${sms}<div class="nota">${esc(fechaHora(m.fecha, !m.manual))} · ${esc(m.persona)} · ${esc(etiqueta)}${m.manual ? " · apuntado a mano" : ""}${m.cambiado ? " · cambiado a mano" : ""}</div></div>` +
+    `<div style="text-align:right"><div class="${clase}">${signo}${m.fils != null ? aed(m.fils) : "?"}</div>` +
+    `${conBotones && m.clave && (m.tipo === "gasto" || m.fils == null) ? `<button class="marcar" data-mov="${esc(m.clave)}">Cambiar</button>` : ""}</div></div>`;
 }
 const CSS = `:root{--fondo:#F2F4F7;--carta:#FFFFFF;--tinta:#13202B;--suave:#5E6B77;--pista:#E3E7EC;--bien:#1E9E5A;--aviso:#EA8A12;--mal:#DC2F45;--linea:#E8EBEF;--acento:#2563EB}
 @media (prefers-color-scheme:dark){:root{--fondo:#0D1217;--carta:#182029;--tinta:#EEF2F5;--suave:#98A5B1;--pista:#27313B;--bien:#34C27A;--aviso:#F59E2B;--mal:#F0566A;--linea:#232D37;--acento:#5B8DEF}}
@@ -328,12 +350,12 @@ function cuerpo(r, { generado, familia, botones } = {}) {
   const totalPresupuesto = r.presupuesto.reduce((t, p) => t + p.limite, 0);
   const consumidoPresupuesto = r.presupuesto.reduce((t, p) => t + p.consumido, 0);
   const revisar = r.revisar.length
-    ? `<section><h2>Para revisar (${r.revisar.length})</h2>${r.revisar.map(filaMovimiento).join("")}<p class="nota">Movimientos sin categoría o que la computadora no pudo comprobar del todo.</p></section>`
+    ? `<section><h2>Para revisar (${r.revisar.length})</h2>${r.revisar.map((m) => filaMovimiento(m, botones)).join("")}<p class="nota">Movimientos sin categoría o que la computadora no pudo comprobar del todo.</p></section>`
     : "";
   const listaRechazados = r.movimientos.filter((m) => m.tipo === "rechazado");
   const rechazados = listaRechazados.length
     ? `<section><h2>Pagos rechazados (${listaRechazados.length})</h2>${listaRechazados.map((m) =>
-      `<div class="mov"><div><b>${esc(m.comercio || "Sin comercio")}</b><div class="nota">${esc(m.fecha)} · ${esc(m.persona)} · no suma al gasto</div></div><div class="tenue">${aed(m.fils)}</div></div>`).join("")}</section>`
+      `<div class="mov"><div><b>${esc(m.comercio || "Sin comercio")}</b><div class="nota">${esc(fechaHora(m.fecha))} · ${esc(m.persona)} · no suma al gasto</div></div><div class="tenue">${aed(m.fils)}</div></div>`).join("")}</section>`
     : "";
   const otras = r.otras.length
     ? `<section><h2>Otros gastos (sin presupuesto)</h2>${r.otras.map((o) => `<div class="mov"><b>${esc(o.categoria)}</b><div>${aed(o.fils)}</div></div>`).join("")}</section>`
@@ -357,8 +379,8 @@ ${rechazados}
 ${otras}
 <section><h2>Por persona</h2>${r.porPersona.length ? r.porPersona.map((p) => `<div class="mov"><b>${esc(p.persona)}</b><div>${aed(p.fils)}</div></div>`).join("") : '<p class="nota">Sin gastos este mes.</p>'}</section>
 ${revisar}
-<section><h2>Últimos movimientos</h2>${r.movimientos.slice(0, 30).map(filaMovimiento).join("") || '<p class="nota">Sin movimientos este mes.</p>'}</section>
-<p class="pie">Importes en AED · actualizado ${esc(generado || "")}</p>
+<section><h2>Últimos movimientos</h2>${r.movimientos.slice(0, 30).map((m) => filaMovimiento(m, botones)).join("") || '<p class="nota">Sin movimientos este mes.</p>'}</section>
+<p class="pie">Importes en AED · actualizado ${esc(fechaHora(generado))}</p>
 `;
 }
 function pagina(r, opciones = {}) {
@@ -369,6 +391,6 @@ function pagina(r, opciones = {}) {
 ${CSS}</style></head><body>
 ${cuerpo(r, opciones)}</body></html>`;
 }
-module.exports = { pagina, cuerpo, CSS, aed, semaforo, nombreMes, esc };
+module.exports = { pagina, cuerpo, CSS, aed, semaforo, nombreMes, esc, fechaHora };
 return module.exports;})();
 window.Finanzas=Object.assign({},M["./lector.js"],M["./motor.js"],M["./panel.js"]);})();
