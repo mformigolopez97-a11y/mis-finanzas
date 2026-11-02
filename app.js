@@ -22,6 +22,9 @@ const CLAVE_FECHA = "mf-actualizado";
 const CLAVE_PAGADOS = "mf-pagados";
 // Gastos apuntados a mano: [{ id, fecha, importe, categoria, comercio, persona }]
 const CLAVE_MANUALES = "mf-manuales";
+// Categorías para elegir que no tienen límite mensual (2026-11-02:
+// "Casa" = compras puntuales del hogar y su envío).
+const CATEGORIAS_SIN_LIMITE = ["Casa", "Otros"];
 
 function manuales() {
   try { return JSON.parse(leer(CLAVE_MANUALES) || "[]"); } catch (e) { return []; }
@@ -161,7 +164,7 @@ function hoy() {
 function pintarGasto(c) {
   const vista = document.getElementById("vista");
   const e = F.esc;
-  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.fijos || []).map((f) => f.nombre), ...(c.comercios || []).map((r) => r.categoria), "Otros"])];
+  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.fijos || []).map((f) => f.nombre), ...(c.comercios || []).map((r) => r.categoria), ...CATEGORIAS_SIN_LIMITE])];
   const lista = manuales().slice().sort((a, b) => b.fecha.localeCompare(a.fecha));
   vista.innerHTML = `
   <h1>Apuntar un gasto</h1>
@@ -207,7 +210,7 @@ function pintarAjustes(c) {
   const vista = document.getElementById("vista");
   const movs = todosLosMovimientos(c);
   const sinCategoria = [...new Set(movs.filter((m) => m.categoria === "Sin clasificar" && m.comercio).map((m) => m.comercio))];
-  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.comercios || []).map((r) => r.categoria)])].sort();
+  const categorias = [...new Set([...Object.keys(c.presupuestos), ...(c.comercios || []).map((r) => r.categoria), ...CATEGORIAS_SIN_LIMITE])].sort();
   const e = F.esc;
 
   vista.innerHTML = `
@@ -273,7 +276,7 @@ document.getElementById("abrir-ajustes").addEventListener("click", () => { enAju
 document.getElementById("nuevo-gasto").addEventListener("click", () => { enGasto = !enGasto; enAjustes = false; avisar(""); pintar(); });
 
 // Versión visible al pie: con una captura se sabe qué programa tiene el teléfono.
-const VERSION_APP = 10;
+const VERSION_APP = 11;
 // Diagnóstico: qué trajo el enlace al abrir (solo tamaños y los primeros
 // caracteres, que son siempre iguales y no contienen datos).
 const LLEGO = (() => {

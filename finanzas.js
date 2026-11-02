@@ -293,7 +293,10 @@ function filaMovimiento(m) {
   const etiqueta = { gasto: m.categoria, ingreso: "Ingreso", enviado: "Dinero enviado", rechazado: "Rechazado (no suma)" }[m.tipo] || "Revisar";
   const signo = m.tipo === "ingreso" ? "+" : m.tipo === "rechazado" ? "" : "−";
   const clase = m.tipo === "ingreso" ? "bien" : m.tipo === "rechazado" ? "tenue" : "";
-  return `<div class="mov"><div><b>${esc(m.comercio || etiqueta)}</b><div class="nota">${esc(m.fecha.slice(0, m.manual ? 10 : 16))} · ${esc(m.persona)} · ${esc(etiqueta)}${m.manual ? " · apuntado a mano" : ""}</div></div>` +
+  const sinClasificar = m.fils == null || (m.tipo === "gasto" && m.categoria === "Sin clasificar");
+  const titulo = m.fils == null && !m.comercio ? "SMS que aún no sé leer" : m.comercio || etiqueta;
+  const sms = sinClasificar && m.sms ? `<div class="nota sms">SMS: ${esc(m.sms.replace(/\s*\n\s*/g, " · "))}</div>` : "";
+  return `<div class="mov"><div><b>${esc(titulo)}</b>${sms}<div class="nota">${esc(m.fecha.slice(0, m.manual ? 10 : 16))} · ${esc(m.persona)} · ${esc(etiqueta)}${m.manual ? " · apuntado a mano" : ""}</div></div>` +
     `<div class="${clase}">${signo}${m.fils != null ? aed(m.fils) : "?"}</div></div>`;
 }
 const CSS = `:root{--fondo:#F2F4F7;--carta:#FFFFFF;--tinta:#13202B;--suave:#5E6B77;--pista:#E3E7EC;--bien:#1E9E5A;--aviso:#EA8A12;--mal:#DC2F45;--linea:#E8EBEF;--acento:#2563EB}
